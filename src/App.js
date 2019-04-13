@@ -17,7 +17,7 @@ class App extends Component {
             address: address,
             senderPublicKey: senderPublicKey,
             senderSeed: senderSeed,
-            contractAddress: '3N9UfhqeB5hRaKF9LvQrT3naVFJ8cPUAo1m',
+            contractAddress: '3N2xvnLofgqToJKXCRhQzUEfvmXJ951a6UK',
             page: (address && senderPublicKey && senderSeed) ? 'auction' : 'registration',
             nodeUrl: 'https://testnodes.wavesnodes.com',
 
@@ -26,8 +26,15 @@ class App extends Component {
             auctionDuration: '100',
             auctionMinBid: '0.1',
 
-            isCreatingAuction: false
+            isCreatingAuction: false,
+            auctions: [],
+            height: 0
         };
+
+        if (this.state.page === 'auction') {
+            this.loadAuctions();
+            setInterval(this.loadAuctions, 1000);
+        }
 
         this.checkWavesKeeperInterval = setInterval(() => {
             if (window.WavesKeeper) {
@@ -51,6 +58,43 @@ class App extends Component {
             }
         }, 100);
     }
+
+    loadAuctions = () => {
+        let height = 0;
+        fetch('https://testnode1.wavesnodes.com/blocks/height')
+            .then(data => data.json())
+            .then(data => {
+                height = data.height;
+                this.setState({height});
+            })
+            .then(() => fetch(`https://testnode1.wavesnodes.com/addresses/data/${this.state.contractAddress}`)
+                .then(data => data.json())
+                .then(data => {
+                    //console.log(data);
+                    let auctions = [];
+                    let mapped = {};
+                    data.forEach(item => mapped[item.key] = item.value);
+                    if (mapped['last_auction_id'] > 0) {
+                        for (let i = mapped['last_auction_id']; i > 0; i--) {
+                            auctions.push({
+                                id: i,
+                                owner: mapped[`auction_${i}_owner`],
+                                amount: mapped[`auction_${i}_amount`],
+                                asset_id: mapped[`auction_${i}_asset_id`],
+                                duration: mapped[`auction_${i}_duration`],
+                                is_active: mapped[`auction_${i}_is_active`],
+                                last_bid: mapped[`auction_${i}_last_bid`],
+                                last_bid_owner: mapped[`auction_${i}_last_bid_owner`],
+                                min_bid: mapped[`auction_${i}_min_bid`],
+                                height
+                            });
+                        }
+                    }
+
+                    console.log(auctions);
+                    this.setState({auctions});
+                }));
+    };
 
     onChange = (e) => {
         this.setState({
@@ -126,19 +170,16 @@ class App extends Component {
                 function: "createAuction",
                 args: [
                     {
-                        type: "string", value: this.state.auctionAssetId
+                        type: "integer", value: this.state.auctionDuration
                     },
                     {
-                        type: "string", value: this.state.auctionAmount
-                    },
-                    {
-                        type: "string", value: this.state.auctionDuration
-                    },
-                    {
-                        type: "string", value: this.state.auctionMinBid
+                        type: "integer", value: this.state.auctionMinBid * 100000000
                     },
                 ]
             },
+            payment: [
+                {amount: this.state.auctionAmount * 100000000, assetId: this.state.auctionAssetId}
+            ],
             senderPublicKey: this.state.senderPublicKey.trim(),
             seed: this.state.senderSeed.trim()
         });
@@ -149,6 +190,83 @@ class App extends Component {
                 this.setState({isCreatingAuction: false});
                 console.log(resp);
                 alert('Auction created');
+            })
+            .catch(error => alert('Error: ' + error.message));
+    };
+
+    onCancel = (id) => {
+        const txData = invokeScript({
+            dappAddress: this.state.contractAddress,
+            call: {
+                function: "cancel",
+                args: [
+                    {
+                        type: "integer", value: id
+                    }
+                ]
+            },
+            payment: [],
+            senderPublicKey: this.state.senderPublicKey.trim(),
+            seed: this.state.senderSeed.trim()
+        });
+
+        broadcast(txData, this.state.nodeUrl)
+            .then(resp => {
+                console.log(resp);
+                alert('Auction cancelled');
+            })
+            .catch(error => alert('Error: ' + error.message));
+    };
+
+    onPayAndReceive = (id, amountToPay,item) => {
+        const txData = invokeScript({
+            dappAddress: this.state.contractAddress,
+            call: {
+                function: "payAndReceive",
+                args: [
+                    {
+                        type: "integer", value: id
+                    }
+                ]
+            },
+            payment: [
+                {amount: amountToPay, assetId: null}
+            ],
+            senderPublicKey: this.state.senderPublicKey.trim(),
+            seed: this.state.senderSeed.trim()
+        });
+
+        broadcast(txData, this.state.nodeUrl)
+            .then(resp => {
+                console.log(resp);
+                alert('Request sent');
+            })
+            .catch(error => alert('Error: ' + error.message));
+    };
+
+    onBid = (id, amount) => {
+        const txData = invokeScript({
+            dappAddress: this.state.contractAddress,
+            call: {
+                function: "bid",
+                args: [
+                    {
+                        type: "integer", value: id
+                    },
+                    {
+                        type: "integer", value: amount * 100000000
+                    },
+                ]
+            },
+            payment: [],
+            senderPublicKey: this.state.senderPublicKey.trim(),
+            seed: this.state.senderSeed.trim()
+        });
+
+        broadcast(txData, this.state.nodeUrl)
+            .then(resp => {
+                console.log(resp);
+                alert('Bid placed');
             })
             .catch(error => alert('Error: ' + error.message));
     };
@@ -170,8 +288,14 @@ class App extends Component {
     };
 
     render() {
-        const auctions = [1, 2, 3, 4].map((item, index) => {
-            return <Auction key={index} isOwner={index === 2}/>;
+        const auctions = this.state.auctions.map(item => {
+            return <Auction key={item.id}
+                            item={item}
+                            onCancel={this.onCancel}
+                            onPayAndReceive={this.onPayAndReceive}
+                            onBid={this.onBid}
+                            address={this.state.address.toLowerCase()}
+                            isOwner={item.owner ? item.owner.toLowerCase() === this.state.address.toLowerCase() : false}/>;
         });
         let page = <Fragment>
 
@@ -181,6 +305,8 @@ class App extends Component {
                             Create Auction
                         </button>
                         <br/><br/>
+                        <p>Current height: {this.state.height}</p>
+
 
                         <div className="modal fade" id="createAuction" tabIndex="-1" role="dialog"
                              aria-labelledby="exampleModalLabel" aria-hidden="true">

@@ -108,7 +108,7 @@ func cancel(auctionId: Int) = {
     let isValidSender = auctionOwner == toBase58String(i.caller.bytes)
 
     if(!auctionIsActive) then throw("Auction inactive")
-    else if(auctionDuration < height) then throw("Auction already end")
+    #else if(auctionDuration < height) then throw("Auction already end")
     else if(!isValidSender) then throw("You are not auction owner")
     else {
         ScriptResult(

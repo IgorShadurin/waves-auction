@@ -1,6 +1,6 @@
 const issuedAssetId = 'FiNvZ2yHF1j7nxGcNugfahhdXHMupRA7DNXi4h2YKNUg';
-const durationInBlocks = 5;
-const testAuction = 14;
+const durationInBlocks = 2;
+const testAuction = 20;
 const minBid = 1000000;
 const currentBid = 1000001;
 describe('Auction test suite', () => {
@@ -21,7 +21,7 @@ describe('Auction test suite', () => {
                     {type:"integer", value: minBid},
                 ]},
             payment: [
-                {amount: 10000000, assetId: issuedAssetId }
+                {amount: 100000, assetId: issuedAssetId }
             ]});
         await broadcast(ttx)
         await waitForTx(ttx.id);
