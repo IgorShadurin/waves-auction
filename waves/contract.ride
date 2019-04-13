@@ -5,8 +5,6 @@
 @Callable(i)
 func createAuction(duration: Int, minBid: Int) = {
     let lastAuctionIdKey = "last_auction_id"
-    #let currentKey = toBase58String(i.caller.bytes)
-    #let lastAuctionId = extract(getInteger(this, lastAuctionIdKey))
     let lastAuctionId = match getInteger(this, lastAuctionIdKey) {
                 case a:Int => a
                 case _ => 0
@@ -22,9 +20,11 @@ func createAuction(duration: Int, minBid: Int) = {
         let auctionDurationKey = "auction_" + newAuctionId + "_duration"
         let auctionMinBidKey = "auction_" + newAuctionId + "_min_bid"
         let auctionLastBidKey = "auction_" + newAuctionId + "_last_bid"
+        let auctionLastBidOwnerKey = "auction_" + newAuctionId + "_last_bid_owner"
         let auctionOwnerKey = "auction_" + newAuctionId + "_owner"
         let auctionAmountKey = "auction_" + newAuctionId + "_amount"
         let auctionAssetIdKey = "auction_" + newAuctionId + "_asset_id"
+        let auctionIsActiveKey = "auction_" + newAuctionId + "_is_active"
         let userBalanceKey = "balance_" + ownerWallet + "_" + assetId
 
         let currentAmount = match getInteger(this, userBalanceKey) {
@@ -32,8 +32,6 @@ func createAuction(duration: Int, minBid: Int) = {
                 case _ => 0
         }
         let newAmount = currentAmount + pmt.amount
-
-
         WriteSet([
             DataEntry(auctionDurationKey, height + duration),
             DataEntry(auctionMinBidKey, minBid),
@@ -42,6 +40,8 @@ func createAuction(duration: Int, minBid: Int) = {
             DataEntry(auctionAmountKey, pmt.amount),
             DataEntry(auctionAssetIdKey, assetId),
             DataEntry(userBalanceKey, newAmount),
+            DataEntry(auctionIsActiveKey, true),
+            DataEntry(auctionLastBidOwnerKey, ""),
             DataEntry(lastAuctionIdKey, id)
         ])
     }
@@ -54,6 +54,8 @@ func bid(auctionId: Int, bidAmount: Int) = {
     let auctionMinBidKey = "auction_" + newAuctionId + "_min_bid"
     let auctionLastBidKey = "auction_" + newAuctionId + "_last_bid"
     let auctionOwnerKey = "auction_" + newAuctionId + "_owner"
+    let auctionLastBidOwnerKey = "auction_" + newAuctionId + "_last_bid_owner"
+    let auctionIsActiveKey = "auction_" + newAuctionId + "_is_active"
     let lastAuctionIdKey = "last_auction_id"
 
     let auctionDuration = extract(getInteger(this, auctionDurationKey))
@@ -61,61 +63,105 @@ func bid(auctionId: Int, bidAmount: Int) = {
     let auctionLastBid = extract(getInteger(this, auctionLastBidKey))
     let auctionOwner = extract(getString(this, auctionOwnerKey))
     let lastAuctionId = extract(getInteger(this, lastAuctionIdKey))
+    let auctionIsActive = extract(getBoolean(this, auctionIsActiveKey))
 
-    let pmt = extract(i.payment)
-    let isValidHeight = auctionDuration <= height
+    let isValidAuction = auctionId <= lastAuctionId
+    let isValidHeight = auctionDuration >= height
     let isValidMinBid = bidAmount >= auctionMinBid
     let isValidCurrentBid = bidAmount > auctionLastBid
-    let isAmountExists = assetBalance(i.caller, pmt.assetId) >= bidAmount
+    let isAmountExists = assetBalance(i.caller, unit) >= bidAmount
     let isValidSender = auctionOwner != toBase58String(i.caller.bytes)
 
-    if(!isValidHeight) then throw("Action already end")
+    if(!isValidAuction) then throw("Auction not exists")
+    else if(!auctionIsActive) then throw("Auction not active")
+    else if(!isValidHeight) then throw("Auction already end")
     else if(!isValidMinBid) then throw("Bid less that min")
-    else if(!isValidCurrentBid) then throw("Last bid more than yours")
+    else if(!isValidCurrentBid) then throw("Last bid more than your")
     else if(!isAmountExists) then throw("Not enough balance in your wallet")
     else if(!isValidSender) then throw("You can not bid in your auction")
-    else if (isDefined(pmt.assetId)) then throw("Can transfer Waves only")
     else {
         WriteSet([
-            DataEntry(auctionLastBidKey, bidAmount)
+            DataEntry(auctionLastBidKey, bidAmount),
+            DataEntry(auctionLastBidOwnerKey, toBase58String(i.caller.bytes))
         ])
     }
 }
 
 @Callable(i)
-func validateEmail(email: String, code: String) = {
-    let isVerifiedKey = email + "_is_valid"
-    let isVerified = isDefined(getBoolean(this, isVerifiedKey)) && extract(getBoolean(this, isVerifiedKey))
-    if (isVerified) then throw("Email already verified")
+func cancel(auctionId: Int) = {
+    let newAuctionId = toString(auctionId)
+    let auctionDurationKey = "auction_" + newAuctionId + "_duration"
+    let auctionOwnerKey = "auction_" + newAuctionId + "_owner"
+    let auctionAmountKey = "auction_" + newAuctionId + "_amount"
+    let auctionAssetIdKey = "auction_" + newAuctionId + "_asset_id"
+    let auctionIsActiveKey = "auction_" + newAuctionId + "_is_active"
+
+    let auctionDuration = extract(getInteger(this, auctionDurationKey))
+    let auctionAmount = extract(getInteger(this, auctionAmountKey))
+    let auctionOwner = extract(getString(this, auctionOwnerKey))
+    let auctionAssetId = extract(getString(this, auctionAssetIdKey))
+    let auctionIsActive = extract(getBoolean(this, auctionIsActiveKey))
+    let userBalanceKey = "balance_" + auctionOwner + "_" + auctionAssetId
+    let userBalance = extract(getInteger(this, userBalanceKey))
+    let newBalance = userBalance - auctionAmount
+
+    let isValidSender = auctionOwner == toBase58String(i.caller.bytes)
+
+    if(!auctionIsActive) then throw("Auction inactive")
+    else if(auctionDuration < height) then throw("Auction already end")
+    else if(!isValidSender) then throw("You are not auction owner")
     else {
-        let key = email + "_code_hash"
-        let currentKey = toBase58String(i.caller.bytes)
-        let originalCode = extract(getString(this, key))
-        let result = isDefined(getString(this, key)) && sha256(fromBase64String(code)) == fromBase64String(originalCode)
-        if(!result) then throw("Incorrect code")
-        else{
+        ScriptResult(
             WriteSet([
-                DataEntry(email + "_is_valid", result),
-                DataEntry(email + "_owner", currentKey)
-            ])
-        }
+                DataEntry(userBalanceKey, newBalance),
+                DataEntry(auctionIsActiveKey, false)
+            ]),
+            TransferSet([ScriptTransfer(i.caller, auctionAmount, unit)])
+        )
     }
 }
 
 @Callable(i)
-func payToEmail(email: String) = {
-    let isVerifiedKey = email + "_is_valid"
-    let ownerKey = email + "_owner"
-    let isVerified = isDefined(getBoolean(this, isVerifiedKey)) && extract(getBoolean(this, isVerifiedKey))
-    let paymentReceiver = Address(fromBase58String(extract(getString(this, ownerKey))))
+func payAndReceive(auctionId: Int) = {
+    let newAuctionId = toString(auctionId)
     let pmt = extract(i.payment)
+    let assetId = toBase58String(value(pmt.assetId))
+    let auctionDurationKey = "auction_" + newAuctionId + "_duration"
+    let auctionMinBidKey = "auction_" + newAuctionId + "_min_bid"
+    let auctionLastBidKey = "auction_" + newAuctionId + "_last_bid"
+    let auctionLastBidOwnerKey = "auction_" + newAuctionId + "_last_bid_owner"
+    let auctionOwnerKey = "auction_" + newAuctionId + "_owner"
+    let auctionAmountKey = "auction_" + newAuctionId + "_amount"
+    let auctionAssetIdKey = "auction_" + newAuctionId + "_asset_id"
+    let auctionIsActiveKey = "auction_" + newAuctionId + "_is_active"
+
+    let auctionDuration = extract(getInteger(this, auctionDurationKey))
+    let auctionAmount = extract(getInteger(this, auctionAmountKey))
+    let auctionOwner = extract(getString(this, auctionOwnerKey))
+    let auctionAssetId = extract(getString(this, auctionAssetIdKey))
+    let auctionIsActive = extract(getBoolean(this, auctionIsActiveKey))
+    let userBalanceKey = "balance_" + auctionOwner + "_" + auctionAssetId
+    let userBalance = extract(getInteger(this, userBalanceKey))
+    let auctionLastBid = extract(getInteger(this, auctionLastBidKey))
+    let auctionLastBidOwner = extract(getString(this, auctionLastBidOwnerKey))
+    let newBalance = userBalance - auctionAmount
+
     if (isDefined(pmt.assetId)) then throw("Can transfer Waves only")
+    else if(!auctionIsActive) then throw("Auction not active")
+    else if(pmt.amount != auctionLastBid) then throw("Amount not equal last bid")
+    else if(auctionDuration > height) then throw("Auction not complete")
+    else if(Address(fromBase58String(auctionLastBidOwner)) != i.caller) then throw("You are not last bidder")
     else {
-        if (!isVerified)
-            then throw("Email not verified")
-        else {
-            TransferSet([ScriptTransfer(paymentReceiver, pmt.amount, unit)])
-        }
+        ScriptResult(
+            WriteSet([
+                DataEntry(userBalanceKey, newBalance),
+                DataEntry(auctionIsActiveKey, false)
+            ]),
+            TransferSet([
+                ScriptTransfer(i.caller, auctionAmount, fromBase58String(auctionAssetId)),
+                ScriptTransfer(Address(fromBase58String(auctionOwner)), pmt.amount, unit)
+            ])
+        )
      }
 }
 
