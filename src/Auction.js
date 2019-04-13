@@ -10,6 +10,8 @@ export default class Auction extends Component {
     }
 
     render() {
+        const {isOwner} = this.props;
+
         return <div className="col-md-4">
             <div className="card mb-4 shadow-sm">
                 <div className="card-body">
@@ -17,17 +19,23 @@ export default class Auction extends Component {
                     <p className="card-text">Amount: 100</p>
                     <p className="card-text">Min price: 1 WAVES</p>
                     <p className="card-text">Current Bid: 3.3245643 WAVES</p>
-                    <div className="d-flex justify-content-between align-items-center">
-                        <div className="btn-group">
-                            <button type="button" className="btn btn-sm btn-outline-secondary">View
-                            </button>
-                            <button type="button" className="btn btn-sm btn-outline-secondary">Edit
-                            </button>
+
+                    {!isOwner && <div className="d-flex justify-content-between align-items-center">
+                        <div className="input-group mb-3">
+                            <input type="text" className="form-control" placeholder="Amount"/>
+                            <div className="input-group-append">
+                                <button className="btn btn-outline-secondary">
+                                    Bid
+                                </button>
+                            </div>
                         </div>
-                        <button type="button" className="btn btn-sm btn-danger">
+                    </div>}
+
+                    {isOwner && <div className="input-group mb-3">
+                        <button type="button" className="btn btn-block btn-danger">
                             Cancel
                         </button>
-                    </div>
+                    </div>}
                 </div>
             </div>
         </div>;

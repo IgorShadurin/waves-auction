@@ -14,13 +14,19 @@ class App extends Component {
         this.state = {
             wavesKeeper: window.WavesKeeper,
             isLogged: true,
-            isVerificationSent: false,
             address: address,
             senderPublicKey: senderPublicKey,
             senderSeed: senderSeed,
-            oracleAddress: '3N9UfhqeB5hRaKF9LvQrT3naVFJ8cPUAo1m',
+            contractAddress: '3N9UfhqeB5hRaKF9LvQrT3naVFJ8cPUAo1m',
             page: (address && senderPublicKey && senderSeed) ? 'auction' : 'registration',
-            nodeUrl: 'https://testnodes.wavesnodes.com'
+            nodeUrl: 'https://testnodes.wavesnodes.com',
+
+            auctionAssetId: '',
+            auctionAmount: '10',
+            auctionDuration: '100',
+            auctionMinBid: '0.1',
+
+            isCreatingAuction: false
         };
 
         this.checkWavesKeeperInterval = setInterval(() => {
@@ -85,34 +91,66 @@ class App extends Component {
         this.setState({page: 'auction'});
     };
 
-    onSendData = () => {
+    onCreateAuction = () => {
         if (!this.checkWallet()) {
             return;
         }
 
-        if (!this.state.email) {
-            alert('Email is empty');
+        if (!this.state.auctionAssetId) {
+            alert('AssetID is empty');
+
+            return;
+        }
+
+        if (!this.state.auctionAmount) {
+            alert('Amount is empty');
+
+            return;
+        }
+
+        if (!this.state.auctionDuration) {
+            alert('Duration is empty');
+
+            return;
+        }
+
+        if (!this.state.auctionMinBid) {
+            alert('Min Bid is empty');
 
             return;
         }
 
         const txData = invokeScript({
-            dappAddress: this.state.oracleAddress,
+            dappAddress: this.state.contractAddress,
             call: {
-                function: "emailPlease",
+                function: "createAuction",
                 args: [
                     {
-                        type: "string", value: this.state.email
-                    }
+                        type: "string", value: this.state.auctionAssetId
+                    },
+                    {
+                        type: "string", value: this.state.auctionAmount
+                    },
+                    {
+                        type: "string", value: this.state.auctionDuration
+                    },
+                    {
+                        type: "string", value: this.state.auctionMinBid
+                    },
                 ]
             },
             senderPublicKey: this.state.senderPublicKey.trim(),
             seed: this.state.senderSeed.trim()
         });
 
+        this.setState({isCreatingAuction: true});
         broadcast(txData, this.state.nodeUrl)
-            .then(resp => console.log(resp));
-        this.setState({isVerificationSent: true});
+            .then(resp => {
+                this.setState({isCreatingAuction: false});
+                console.log(resp);
+                alert('Auction created');
+            })
+            .catch(error => alert('Error: ' + error.message));
     };
 
     getNavClasses = (isActive) => {
@@ -133,23 +171,97 @@ class App extends Component {
 
     render() {
         const auctions = [1, 2, 3, 4].map((item, index) => {
-            return <Auction key={index}/>;
+            return <Auction key={index} isOwner={index === 2}/>;
         });
         let page = <Fragment>
 
+                <div className="album py-5">
+                    <div className="container">
+                        <button type="button" className="btn btn-primary" data-toggle="modal" data-target="#createAuction">
+                            Create Auction
+                        </button>
+                        <br/><br/>
 
-            <div className="album py-5">
-                <div className="container">
-                    <button className="btn btn-primary">Create Auction</button>
-                    <br/><br/>
-                    <div className="row">
+                        <div className="modal fade" id="createAuction" tabIndex="-1" role="dialog"
+                             aria-labelledby="exampleModalLabel" aria-hidden="true">
+                            <div className="modal-dialog" role="document">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                        <h5 className="modal-title" id="exampleModalLabel">Auction</h5>
+                                        <button type="button" className="close" data-dismiss="modal" aria-label="Close">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                    <div className="modal-body">
 
-                        {auctions}
+                                        <div className="form-group">
+                                            <label>Asset ID</label>
+                                            <input type="text" className="form-control" placeholder="Asset ID"
+                                                   onChange={this.onChange}
+                                                   data-field="auctionAssetId"
+                                                   value={this.state.auctionAssetId}
+                                            />
+                                        </div>
 
+                                        <div className="form-group">
+                                            <label>Amount</label>
+                                            <input type="text" className="form-control" placeholder="Amount"
+                                                   onChange={this.onChange}
+                                                   data-field="auctionAmount"
+                                                   value={this.state.auctionAmount}
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Duration (in blocks)</label>
+                                            <input type="text" className="form-control" placeholder="Duration"
+                                                   onChange={this.onChange}
+                                                   data-field="auctionDuration"
+                                                   value={this.state.auctionDuration}
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Min Bid (in WAVES)</label>
+                                            <input type="text" className="form-control" placeholder="Min Bid"
+                                                   onChange={this.onChange}
+                                                   data-field="auctionMinBid"
+                                                   value={this.state.auctionMinBid}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="modal-footer">
+                                        <button type="button" className="btn btn-secondary" data-dismiss="modal">
+                                            Close
+                                        </button>
+
+                                        {!this.state.isCreatingAuction && <button type="button"
+                                                                                  className="btn btn-primary"
+                                                                                  onClick={this.onCreateAuction}
+                                        >
+                                            Create
+                                        </button>}
+
+                                        {this.state.isCreatingAuction &&
+                                        <button className="btn btn-primary" type="button" disabled>
+                                            <span className="spinner-border spinner-border-sm" role="status"
+                                                  aria-hidden="true"/>
+                                            &nbsp;Creating...
+                                        </button>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="row">
+
+                            {auctions}
+
+                        </div>
                     </div>
                 </div>
-            </div>
-        </Fragment>;
+            </Fragment>
+        ;
 
         return (
             <Fragment>
@@ -227,7 +339,8 @@ class App extends Component {
                     </footer>
                 </div>
 
-            </Fragment>);
+            </Fragment>
+        );
     }
 }
 
