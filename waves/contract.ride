@@ -116,7 +116,9 @@ func cancel(auctionId: Int) = {
                 DataEntry(userBalanceKey, newBalance),
                 DataEntry(auctionIsActiveKey, false)
             ]),
-            TransferSet([ScriptTransfer(i.caller, auctionAmount, unit)])
+            TransferSet([
+                ScriptTransfer(i.caller, auctionAmount, fromBase58String(auctionAssetId))
+            ])
         )
     }
 }

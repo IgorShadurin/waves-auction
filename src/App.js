@@ -20,6 +20,7 @@ class App extends Component {
             contractAddress: '3N2xvnLofgqToJKXCRhQzUEfvmXJ951a6UK',
             page: (address && senderPublicKey && senderSeed) ? 'auction' : 'registration',
             nodeUrl: 'https://testnodes.wavesnodes.com',
+            chainId: 'T',
 
             auctionAssetId: '',
             auctionAmount: '10',
@@ -31,10 +32,10 @@ class App extends Component {
             height: 0
         };
 
-        if (this.state.page === 'auction') {
-            this.loadAuctions();
-            setInterval(this.loadAuctions, 1000);
-        }
+        //if (this.state.page === 'auction') {
+        this.loadAuctions();
+        setInterval(this.loadAuctions, 1000);
+        //}
 
         this.checkWavesKeeperInterval = setInterval(() => {
             if (window.WavesKeeper) {
@@ -91,7 +92,7 @@ class App extends Component {
                         }
                     }
 
-                    console.log(auctions);
+                    //console.log(auctions);
                     this.setState({auctions});
                 }));
     };
@@ -180,9 +181,9 @@ class App extends Component {
             payment: [
                 {amount: this.state.auctionAmount * 100000000, assetId: this.state.auctionAssetId}
             ],
-            senderPublicKey: this.state.senderPublicKey.trim(),
-            seed: this.state.senderSeed.trim()
-        });
+            chainId: this.state.chainId,
+            senderPublicKey: this.state.senderPublicKey.trim()
+        }, this.state.senderSeed.trim());
 
         this.setState({isCreatingAuction: true});
         broadcast(txData, this.state.nodeUrl)
@@ -191,7 +192,10 @@ class App extends Component {
                 console.log(resp);
                 alert('Auction created');
             })
-            .catch(error => alert('Error: ' + error.message));
+            .catch(error => {
+                this.setState({isCreatingAuction: false});
+                alert('Error: ' + error.message)
+            });
     };
 
     onCancel = (id) => {
@@ -206,9 +210,9 @@ class App extends Component {
                 ]
             },
             payment: [],
-            senderPublicKey: this.state.senderPublicKey.trim(),
-            seed: this.state.senderSeed.trim()
-        });
+            chainId: this.state.chainId,
+            senderPublicKey: this.state.senderPublicKey.trim()
+        }, this.state.senderSeed.trim());
 
         broadcast(txData, this.state.nodeUrl)
             .then(resp => {
@@ -218,7 +222,7 @@ class App extends Component {
             .catch(error => alert('Error: ' + error.message));
     };
 
-    onPayAndReceive = (id, amountToPay,item) => {
+    onPayAndReceive = (id, amountToPay, item) => {
         const txData = invokeScript({
             dappAddress: this.state.contractAddress,
             call: {
@@ -232,9 +236,9 @@ class App extends Component {
             payment: [
                 {amount: amountToPay, assetId: null}
             ],
-            senderPublicKey: this.state.senderPublicKey.trim(),
-            seed: this.state.senderSeed.trim()
-        });
+            chainId: this.state.chainId,
+            senderPublicKey: this.state.senderPublicKey.trim()
+        }, this.state.senderSeed.trim());
 
         broadcast(txData, this.state.nodeUrl)
             .then(resp => {
@@ -259,9 +263,9 @@ class App extends Component {
                 ]
             },
             payment: [],
-            senderPublicKey: this.state.senderPublicKey.trim(),
-            seed: this.state.senderSeed.trim()
-        });
+            chainId: this.state.chainId,
+            senderPublicKey: this.state.senderPublicKey.trim()
+        }, this.state.senderSeed.trim());
 
         broadcast(txData, this.state.nodeUrl)
             .then(resp => {
@@ -304,6 +308,9 @@ class App extends Component {
                         <button type="button" className="btn btn-primary" data-toggle="modal" data-target="#createAuction">
                             Create Auction
                         </button>
+                        {/*<button type="button" className="btn btn-primary" onClick={this.test}>
+                            Test
+                        </button>*/}
                         <br/><br/>
                         <p>Current height: {this.state.height}</p>
 

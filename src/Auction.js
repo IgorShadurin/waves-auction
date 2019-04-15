@@ -29,12 +29,14 @@ export default class Auction extends Component {
                         status = 'outdated';
                     }
                 } else {
-                    status = 'bid';
+                    status = 'can_bid';
                 }
             }
         } else {
             status = 'outdated';
         }
+
+        //console.log(item.id, status);
 
         return <div className="col-md-4">
             <div className="card mb-4 shadow-sm">
