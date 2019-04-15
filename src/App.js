@@ -293,13 +293,14 @@ class App extends Component {
 
     render() {
         const auctions = this.state.auctions.map(item => {
+            let address = this.state.address ? this.state.address.toLowerCase() : this.state.address;
             return <Auction key={item.id}
                             item={item}
                             onCancel={this.onCancel}
                             onPayAndReceive={this.onPayAndReceive}
                             onBid={this.onBid}
-                            address={this.state.address.toLowerCase()}
-                            isOwner={item.owner ? item.owner.toLowerCase() === this.state.address.toLowerCase() : false}/>;
+                            address={address}
+                            isOwner={item.owner ? item.owner.toLowerCase() === address : false}/>;
         });
         let page = <Fragment>
 
