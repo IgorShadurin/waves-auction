@@ -21,6 +21,7 @@ class App extends Component {
             page: (address && senderPublicKey && senderSeed) ? 'auction' : 'registration',
             nodeUrl: 'https://testnodes.wavesnodes.com',
             chainId: 'T',
+            wavesDec: 100000000,
 
             auctionAssetId: '',
             auctionAmount: '10',
@@ -31,6 +32,8 @@ class App extends Component {
             auctions: [],
             height: 0
         };
+
+        this.assets = {};
 
         //if (this.state.page === 'auction') {
         this.loadAuctions();
@@ -59,6 +62,39 @@ class App extends Component {
             }
         }, 100);
     }
+
+    receiveAssetCount = (assetId, amount, direction = 'to') => {
+        const calc = () => {
+            const dec = Number('1'.padEnd(this.assets[assetId] + 1, '0'));
+            let result = 0;
+            if (direction === 'to') {
+                result = amount * dec;
+            } else {
+                result = amount / dec;
+            }
+
+            return result;
+        };
+
+        return new Promise((resolve, reject) => {
+            if (this.assets[assetId] === undefined) {
+                fetch(`${this.state.nodeUrl}/assets/details/${assetId}`)
+                    .then(data => data.json())
+                    .then(data => {
+                        this.assets[assetId] = data.decimals;
+
+                        resolve(calc());
+                    })
+                    .catch(error => {
+                        console.error('Error receiveAssetCount: ' + error.message);
+                        reject();
+                    });
+            } else {
+                resolve(calc());
+
+            }
+        });
+    };
 
     loadAuctions = () => {
         let height = 0;
@@ -165,36 +201,43 @@ class App extends Component {
             return;
         }
 
-        const txData = invokeScript({
-            dappAddress: this.state.contractAddress,
-            call: {
-                function: "createAuction",
-                args: [
-                    {
-                        type: "integer", value: this.state.auctionDuration
-                    },
-                    {
-                        type: "integer", value: this.state.auctionMinBid * 100000000
-                    },
-                ]
-            },
-            payment: [
-                {amount: this.state.auctionAmount * 100000000, assetId: this.state.auctionAssetId}
-            ],
-            chainId: this.state.chainId,
-            senderPublicKey: this.state.senderPublicKey.trim()
-        }, this.state.senderSeed.trim());
 
-        this.setState({isCreatingAuction: true});
-        broadcast(txData, this.state.nodeUrl)
-            .then(resp => {
-                this.setState({isCreatingAuction: false});
-                console.log(resp);
-                alert('Auction created');
-            })
-            .catch(error => {
-                this.setState({isCreatingAuction: false});
-                alert('Error: ' + error.message)
+        this.receiveAssetCount(this.state.auctionAssetId, this.state.auctionAmount)
+            .then(assetDec => {
+                const txData = invokeScript({
+                    dappAddress: this.state.contractAddress,
+                    call: {
+                        function: "createAuction",
+                        args: [
+                            {
+                                type: "integer", value: this.state.auctionDuration
+                            },
+                            {
+                                type: "integer", value: this.state.auctionMinBid * this.state.wavesDec
+                            },
+                        ]
+                    },
+                    payment: [
+                        {
+                            amount: assetDec,
+                            assetId: this.state.auctionAssetId
+                        }
+                    ],
+                    chainId: this.state.chainId,
+                    senderPublicKey: this.state.senderPublicKey.trim()
+                }, this.state.senderSeed.trim());
+
+                this.setState({isCreatingAuction: true});
+                broadcast(txData, this.state.nodeUrl)
+                    .then(resp => {
+                        this.setState({isCreatingAuction: false});
+                        console.log(resp);
+                        alert('Auction created');
+                    })
+                    .catch(error => {
+                        this.setState({isCreatingAuction: false});
+                        alert('Error: ' + error.message)
+                    });
             });
     };
 
@@ -258,7 +301,7 @@ class App extends Component {
                         type: "integer", value: id
                     },
                     {
-                        type: "integer", value: amount * 100000000
+                        type: "integer", value: amount * this.state.wavesDec
                     },
                 ]
             },
@@ -295,6 +338,7 @@ class App extends Component {
         const auctions = this.state.auctions.map(item => {
             let address = this.state.address ? this.state.address.toLowerCase() : this.state.address;
             return <Auction key={item.id}
+                            receiveAssetCount={this.receiveAssetCount}
                             item={item}
                             onCancel={this.onCancel}
                             onPayAndReceive={this.onPayAndReceive}

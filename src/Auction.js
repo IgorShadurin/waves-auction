@@ -5,8 +5,12 @@ export default class Auction extends Component {
         super(props);
 
         this.state = {
-            bidAmount: '0.1'
+            bidAmount: '0.1',
+            assetAmount: '...'
         };
+
+        props.receiveAssetCount(props.item.asset_id, props.item.amount, 'from')
+            .then(assetAmount => this.setState({assetAmount}));
     }
 
     onChange = (e) => {
@@ -16,7 +20,7 @@ export default class Auction extends Component {
     };
 
     render() {
-        const {isOwner, item, onCancel, onBid, address, onPayAndReceive} = this.props;
+        const {item, onCancel, onBid, address, onPayAndReceive} = this.props;
         let status = 'can_bid'; // can_bid, can_receive, can_cancel, outdated
         if (item.is_active) {
             if (item.owner.toLowerCase() === address.toLowerCase()) {
@@ -42,7 +46,7 @@ export default class Auction extends Component {
             <div className="card mb-4 shadow-sm">
                 <div className="card-body">
                     <p className="card-text">Asset ID: {item.asset_id}</p>
-                    <p className="card-text">Amount: {Number(item.amount / 100000000).toFixed(8)}</p>
+                    <p className="card-text">Amount: {this.state.assetAmount}</p>
                     <p className="card-text">Min price: {Number(item.min_bid / 100000000).toFixed(8)} WAVES</p>
                     <p className="card-text">Current Bid: {Number(item.last_bid / 100000000).toFixed(8)} WAVES</p>
                     <p className="card-text">Info - id: {item.id}, duration: {item.duration}</p>
@@ -70,7 +74,7 @@ export default class Auction extends Component {
                     {status === 'outdated' &&
                     <div className="input-group mb-3">
                         <button disabled={true} type="button" className="btn btn-block btn-danger">
-                            Auction outdated
+                            Auction complete
                         </button>
                     </div>}
 
